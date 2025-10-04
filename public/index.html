@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spotify Now Playing Wallpaper</title>
+  <style>
+    /* Basic reset */
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: #000;
+    }
+
+    .wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+
+    /* blurred album art background */
+    .bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: blur(20px) saturate(1.2) brightness(.35);
+      transform: scale(1.1);
+    }
+
+    /* subtle animated gradient overlay */
+    .gradient {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(120deg, rgba(255, 0, 150, 0.06), rgba(0, 120, 255, 0.06));
+      mix-blend-mode: screen;
+      animation: shift 12s linear infinite;
+    }
+
+    @keyframes shift {
+      0% {
+        transform: translateX(-10%)
+      }
+
+      50% {
+        transform: translateX(10%)
+      }
+
+      100% {
+        transform: translateX(-10%)
+      }
+    }
+
+    /* main card */
+    .card {
+      text-overflow: ellipsis;
+      position: relative;
+      z-index: 2;
+      width: min(920px, 86%);
+      height: 220px;
+      backdrop-filter: blur(6px) saturate(1.1);
+      border-radius: 18px;
+      display: flex;
+      gap: 18px;
+      padding: 18px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .cover {
+      width: 184px;
+      height: 184px;
+      border-radius: 12px;
+      flex: 0 0 184px;
+      overflow: hidden;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block
+    }
+
+    .info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden
+    }
+
+    .artist {
+      opacity: .85;
+      font-weight: 600
+    }
+
+    .album {
+      opacity: .6;
+      font-size: .9rem
+    }
+
+    /* progress */
+    .progress {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px
+    }
+
+    .progress>.bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #1db954, #1ed760);
+      transition: width 0.3s linear;
+    }
+
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      opacity: 0.85;
+      margin-top: 6px
+    }
+
+    /* waveform overlay: faux bars that animate while playing */
+    .wave {
+      display: flex;
+      position: absolute;
+      right: 28px;
+      top: 28px;
+      z-index: 3;
+      gap: 4px;
+      align-items: flex-end;
+      height: 80px;
+      display: none;
+    }
+
+    .wave .bar {
+      width: 4px;
+      border-radius: 2px;
+      background: linear-gradient(#fff, #ddd);
+      transform-origin: bottom;
+      animation: bounce 1s infinite ease-in-out;
+    }
+
+    .wave .bar:nth-child(2) {
+      animation-delay: 0.08s
+    }
+
+    .wave .bar:nth-child(3) {
+      animation-delay: 0.15s
+    }
+
+    .wave .bar:nth-child(4) {
+      animation-delay: 0.22s
+    }
+
+    .wave .bar:nth-child(5) {
+      animation-delay: 0.32s
+    }
+
+    @keyframes bounce {
+      0% {
+        transform: scaleY(.2)
+      }
+
+      50% {
+        transform: scaleY(1)
+      }
+
+      100% {
+        transform: scaleY(.25)
+      }
+    }
+
+    /* small hint */
+    .hint {
+      position: absolute;
+      left: 18px;
+      bottom: 14px;
+      font-size: 0.8rem;
+      opacity: 0.6
+    }
+
+    /* paused state */
+    .paused .wave .bar {
+      animation-play-state: paused;
+      transform: scaleY(.2)
+    }
+
+    .controls {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .controls button {
+      background: rgba(255, 255, 255, 0.06);
+      border: none;
+      color: #fff;
+      font-size: 1.4rem;
+      padding: 8px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.18s, transform 0.12s;
+    }
+
+    .controls button:hover {
+      background: rgba(255, 255, 255, 0.14);
+      transform: translateY(-2px);
+    }
+
+    /* modern control buttons */
+    .controls {
+      justify-content: center;
+      position: absolute;
+      bottom: 96px;
+      left: 0;
+      right: 0;
+      z-index: 4
+    }
+
+    .control-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 50%;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), inset 0 -2px 6px rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .control-btn:hover {
+      transform: translateY(-4px);
+      background: rgba(0, 0, 0, 0.45)
+    }
+
+    .control-btn:active {
+      transform: translateY(-1px) scale(.98)
+    }
+
+    .control-btn.big {
+      width: 76px;
+      height: 76px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.6)
+    }
+
+    .control-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: #fff
+    }
+
+    /* play/pause dual svg visibility */
+    .play-icon {
+      display: block
+    }
+
+    .pause-icon {
+      display: none
+    }
+
+    .control-btn.playing .play-icon {
+      display: none
+    }
+
+    .control-btn.playing .pause-icon {
+      display: block
+    }
+
+    /* subtle pulse when playing */
+    .control-btn.playing.big {
+      box-shadow: 0 14px 36px rgba(29, 185, 84, 0.18), 0 6px 18px rgba(0, 0, 0, 0.6);
+      animation: pulse 1.8s ease-in-out infinite
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1)
+      }
+
+      50% {
+        transform: scale(1.03)
+      }
+
+      100% {
+        transform: scale(1)
+      }
+    }
+
+    /* toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 140px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      z-index: 50;
+      font-size: 0.95rem;
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .control-btn.busy {
+      opacity: 0.7;
+      pointer-events: none
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="bg" id="bg"></div>
+  <video id="canvasVideo" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(18px) saturate(1.2) brightness(.35);transform:scale(1.05);opacity:0;transition:opacity 420ms ease;pointer-events:none"></video>
+  <div class="gradient"></div>
+
+    <div class="card" id="card">
+      <div class="cover" id="cover"><img id="coverImg" src="" alt="album cover"></div>
+      <div class="info">
+        <div class="title" id="title">Not playing</div>
+        <div class="artist" id="artist"></div>
+        <div class="album" id="album"></div>
+
+        <div class="progress" aria-hidden="true">
+          <div class="bar" id="progressBar"></div>
+        </div>
+        <div class="time-row"><span id="timeCur">0:00</span><span id="timeDur">0:00</span></div>
+      </div>
+
+      <div class="wave" id="wave">
+        <div class="bar" style="height:26%"></div>
+        <div class="bar" style="height:44%"></div>
+        <div class="bar" style="height:62%"></div>
+        <div class="bar" style="height:34%"></div>
+        <div class="bar" style="height:50%"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="control-btn" title="Previous" onclick="control('previous')" id="prevBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6h2v12H6zM8.5 12L20 5v14z" />
+        </svg>
+      </button>
+
+      <button class="control-btn big" title="Play/Pause" onclick="togglePlay()" id="playPauseBtn" aria-pressed="false">
+        <!-- play -->
+        <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <!-- pause -->
+        <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+        </svg>
+      </button>
+
+      <button class="control-btn" title="Next" onclick="control('next')" id="nextBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M16 6h2v12h-2zM4 18l11-6L4 6v12z" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="hint">Spotify • Automatic local fetch</div>
+  </div>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script>
+    // config
+    const API = "/now-playing" // local server endpoint
+    let lastItemId = null
+    let progressInterval = null
+    let lastData = null
+    // stable progress vars
+    let currentProgressMs = 0
+    let currentTrackId = null
+
+    // helper to update progress visual safely (can snap without animation)
+    function setProgressVisual(ms, durationMs, snap = false) {
+      const progressBar = document.getElementById('progressBar')
+      const timeCur = document.getElementById('timeCur')
+      if (!progressBar || !timeCur) return
+      const pct = Math.max(0, Math.min(100, (ms / Math.max(1, durationMs)) * 100))
+      if (snap) {
+        const prev = progressBar.style.transition
+        progressBar.style.transition = 'none'
+        progressBar.style.width = pct + "%"
+        timeCur.textContent = msToTime(ms)
+        requestAnimationFrame(() => requestAnimationFrame(() => { progressBar.style.transition = prev || 'width 0.3s linear' }))
+      } else {
+        progressBar.style.width = pct + "%"
+        timeCur.textContent = msToTime(ms)
+      }
+    }
+
+    function msToTime(ms) {
+      if (!ms && ms !== 0) return "0:00"
+      const s = Math.floor(ms / 1000)
+      const m = Math.floor(s / 60)
+      const sec = String(s % 60).padStart(2, "0")
+      return `${m}:${sec}`
+    }
+
+    async function fetchNow() {
+      try {
+        const res = await fetch(API)
+        if (res.status === 401) {
+          // not authenticated — redirect to login and ask to return here
+          const returnTo = encodeURIComponent(window.location.pathname || '/')
+          window.location.href = `/login?returnTo=${returnTo}`
+          return
+        }
+        if (!res.ok) { throw new Error("not ok") }
+        const data = await res.json()
+        lastData = data
+        updateUI(data)
+      } catch (e) {
+        // show not playing
+        updateUI(null)
+        console.debug("fetch error", e)
+      }
+    }
+
+    function updateUI(data) {
+      const titleEl = document.getElementById("title")
+      const artistEl = document.getElementById("artist")
+      const albumEl = document.getElementById("album")
+      const coverImg = document.getElementById("coverImg")
+      const bg = document.getElementById("bg")
+      const progressBar = document.getElementById("progressBar")
+      const timeCur = document.getElementById("timeCur")
+      const timeDur = document.getElementById("timeDur")
+      const card = document.getElementById("card")
+      const playPauseBtn = document.getElementById("playPauseBtn")
+
+      if (playPauseBtn) {
+        playPauseBtn.classList.toggle('playing', !!data?.is_playing)
+        playPauseBtn.setAttribute('aria-pressed', !!data?.is_playing)
+      }
+
+      if (!data || !data.item) {
+        titleEl.textContent = "Not playing"
+        artistEl.textContent = ""
+        albumEl.textContent = ""
+        coverImg.src = ""
+        bg.style.backgroundImage = ""
+        progressBar.style.width = "0%"
+        timeCur.textContent = "0:00"
+        timeDur.textContent = "0:00"
+        document.body.classList.add("paused")
+        return
+      }
+
+      const item = data.item
+      const artists = item.artists.join(", ")
+  const img = (item.album_images && item.album_images[0] && item.album_images[0].url) || ""
+  const canvasUrl = item.canvas_url || null
+
+      titleEl.textContent = item.name
+      artistEl.textContent = artists
+      albumEl.textContent = item.album
+      coverImg.src = img
+      bg.style.backgroundImage = `url(${img})`
+      // canvas background (if available)
+      const canvasEl = document.getElementById('canvasVideo')
+      if (canvasEl) {
+        if (canvasUrl) {
+          // set only if different to avoid reload
+          if (canvasEl.getAttribute('data-src') !== canvasUrl) {
+            canvasEl.src = canvasUrl
+            canvasEl.setAttribute('data-src', canvasUrl)
+            canvasEl.load()
+          }
+          // fade in
+          canvasEl.style.opacity = 1
+          if (data.is_playing) canvasEl.play().catch(() => {})
+        } else {
+          // fade out
+          canvasEl.style.opacity = 0
+          try { canvasEl.pause() } catch (e) {}
+        }
+      }
+      timeDur.textContent = msToTime(item.duration_ms)
+
+      // stable progress tracking to avoid bouncing between server and local update
+      const serverStart = Number(data.progress_ms || 0)
+      const serverTime = Number(data.timestamp || Date.now())
+      const elapsedSince = Math.max(0, Date.now() - serverTime)
+      const serverCur = Math.min(item.duration_ms, serverStart + elapsedSince)
+
+      // if a new track started, reset local progress and snap
+      if (currentTrackId !== item.id) {
+        currentTrackId = item.id
+        currentProgressMs = serverCur
+        setProgressVisual(currentProgressMs, item.duration_ms, true)
+      } else {
+        // same track
+        // if (data.is_playing) {
+        //   // if server has jumped ahead significantly, snap forward
+        //   if (serverCur > currentProgressMs + 1500) {
+        //     currentProgressMs = serverCur
+        //     setProgressVisual(currentProgressMs, item.duration_ms, true)
+        //   } else {
+        //     // otherwise prefer local progress (avoid backward jumps)
+        //     currentProgressMs = Math.max(currentProgressMs, serverCur)
+        //     setProgressVisual(currentProgressMs, item.duration_ms, false)
+        //   }
+        // } else {
+        //   // paused/stopped: follow server exactly
+            currentProgressMs = serverCur
+            setProgressVisual(currentProgressMs, item.duration_ms, true)
+        // }
+      }
+
+      card.classList.toggle("paused", !data.is_playing)
+
+      // ensure single interval advancing local progress while playing
+      if (data.is_playing) {
+        if (!progressInterval) {
+          progressInterval = setInterval(() => {
+            currentProgressMs += 1000
+            if (currentProgressMs > item.duration_ms) {
+              currentProgressMs = item.duration_ms
+              clearInterval(progressInterval)
+              progressInterval = null
+            }
+            setProgressVisual(currentProgressMs, item.duration_ms, false)
+          }, 1000)
+        }
+      } else {
+        if (progressInterval) { clearInterval(progressInterval); progressInterval = null }
+      }
+
+      // animate waveform intensity slightly based on playing or paused
+      const bars = document.querySelectorAll(".wave .bar")
+      bars.forEach((b, i) => {
+        const base = 30 + (i * 10)
+        // set height based on pseudorandom from track id to keep it consistent for track
+        const seed = Array.from(item.id || "0").reduce((s, c) => s + c.charCodeAt(0), 0)
+        const h = ((seed + i * 37) % 60) + 20
+        b.style.height = (data.is_playing ? h : 12) + "%"
+        b.style.animationPlayState = data.is_playing ? "running" : "paused"
+      })
+    }
+
+    async function control(action) {
+      const buttons = document.querySelectorAll('.control-btn')
+      buttons.forEach(b => b.classList.add('busy'))
+      try {
+        const res = await fetch("/" + action, { method: "POST" })
+        if (res.status === 401) {
+          const returnTo = encodeURIComponent(window.location.pathname || '/')
+          window.location.href = `/login?returnTo=${returnTo}`
+          return
+        } else if (!res.ok) {
+          const txt = await res.text().catch(() => '')
+          showToast('Action failed: ' + (txt || res.status))
+        }
+        await fetchNow() // refresh UI after attempting action
+      } catch (e) {
+        console.error("control failed", e)
+        showToast('Network error')
+      } finally {
+        buttons.forEach(b => b.classList.remove('busy'))
+      }
+    }
+
+    function togglePlay() {
+      if (!lastData) return
+      const btn = document.getElementById("playPauseBtn")
+      if (btn) btn.classList.add('busy')
+      if (lastData.is_playing) {
+        control("pause")
+        if (btn) { btn.classList.remove('playing'); btn.setAttribute('aria-pressed', 'false') }
+      } else {
+        control("play")
+        if (btn) { btn.classList.add('playing'); btn.setAttribute('aria-pressed', 'true') }
+      }
+      if (btn) setTimeout(() => btn.classList.remove('busy'), 800)
+    }
+
+    function showToast(msg, clickable) {
+      const t = document.getElementById('toast')
+      if (!t) return
+      t.style.display = 'block'
+      t.innerHTML = msg
+      if (clickable) {
+        t.style.cursor = 'pointer'
+        t.onclick = () => { window.location.href = '/login' }
+      } else {
+        t.style.cursor = 'default'
+        t.onclick = null
+      }
+      clearTimeout(window._toastTimer)
+      window._toastTimer = setTimeout(() => { t.style.display = 'none'; t.onclick = null }, 4500)
+    }
+    // poll
+    fetchNow()
+    setInterval(fetchNow, 5000) // poll every 5s
+  </script>
+</body>
+
+</html>

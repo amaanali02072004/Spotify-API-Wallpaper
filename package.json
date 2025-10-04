@@ -1,0 +1,16 @@
+{
+  "name": "spotify-wallpaper",
+  "version": "1.0.0",
+  "description": "Wallpaper Engine Spotify Now Playing",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "spotify-web-api-node": "^5.0.2"
+  }
+}
