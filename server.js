@@ -17,9 +17,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const PORT = 8888
-const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || "dedc8558315e430ab21b1d76133a8624"
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || "dabb7541b5974e649e8ade4b129b6af5"
-// const REDIRECT_URI = `http://localhost:${PORT}/callback`
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || null
+const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || null
 const REDIRECT_URI = `http://127.0.0.1:${PORT}/callback`
 
 const app = express()
@@ -52,6 +51,21 @@ app.get("/login", (req, res) => {
   const returnTo = req.query.returnTo || '/'
   // encode the returnTo path into state (decoded in /callback)
   const state = encodeURIComponent(returnTo)
+  // if CLIENT_ID or CLIENT_SECRET are missing, show a helpful page instead of redirecting
+  const authPossible = !!(CLIENT_ID && CLIENT_SECRET)
+  if (!authPossible) {
+    res.status(400).send(`
+      <html><head><meta charset="utf-8"><title>Spotify Login - Misconfigured</title></head>
+      <body style="font-family:system-ui,Segoe UI,Roboto,Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#111;color:#fff">
+        <div style="max-width:720px;padding:24px;background:#0f1720;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,0.03)">
+          <h2>Spotify OAuth is not configured</h2>
+          <p>The server is missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET. Please set these in your <code>.env</code> or environment.</p>
+          <p>Current Redirect URI: <code>${REDIRECT_URI}</code></p>
+        </div>
+      </body></html>
+    `)
+    return
+  }
   const authorizeURL = spotifyApi.createAuthorizeURL(scopes, state)
   res.redirect(authorizeURL)
 })
@@ -87,8 +101,8 @@ app.get("/callback", async (req, res) => {
 
 app.post("/play", async (req, res) => {
   try {
-    await refreshAccessTokenIfNeeded()
-    if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login" })
+  await refreshAccessTokenIfNeeded()
+  if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login", auth_possible: !!(CLIENT_ID && CLIENT_SECRET) })
     await spotifyApi.play()
     res.json({ success: true })
   } catch (err) {
@@ -101,8 +115,8 @@ app.post("/play", async (req, res) => {
 
 app.post("/pause", async (req, res) => {
   try {
-    await refreshAccessTokenIfNeeded()
-    if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login" })
+  await refreshAccessTokenIfNeeded()
+  if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login", auth_possible: !!(CLIENT_ID && CLIENT_SECRET) })
     await spotifyApi.pause()
     res.json({ success: true })
   } catch (err) {
@@ -114,8 +128,8 @@ app.post("/pause", async (req, res) => {
 
 app.post("/next", async (req, res) => {
   try {
-    await refreshAccessTokenIfNeeded()
-    if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login" })
+  await refreshAccessTokenIfNeeded()
+  if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login", auth_possible: !!(CLIENT_ID && CLIENT_SECRET) })
     await spotifyApi.skipToNext()
     res.json({ success: true })
   } catch (err) {
@@ -127,8 +141,8 @@ app.post("/next", async (req, res) => {
 
 app.post("/previous", async (req, res) => {
   try {
-    await refreshAccessTokenIfNeeded()
-    if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login" })
+  await refreshAccessTokenIfNeeded()
+  if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login", auth_possible: !!(CLIENT_ID && CLIENT_SECRET) })
     await spotifyApi.skipToPrevious()
     res.json({ success: true })
   } catch (err) {
@@ -155,8 +169,8 @@ async function refreshAccessTokenIfNeeded() {
 
 app.get("/now-playing", async (req, res) => {
   try {
-    await refreshAccessTokenIfNeeded()
-    if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login" })
+  await refreshAccessTokenIfNeeded()
+  if (!spotifyApi.getAccessToken()) return res.status(401).json({ error: "Not authenticated. Visit /login", auth_possible: !!(CLIENT_ID && CLIENT_SECRET) })
 
     const data = await spotifyApi.getMyCurrentPlaybackState()
     if (!data.body || data.status === 204) return res.json({ is_playing: false, item: null })

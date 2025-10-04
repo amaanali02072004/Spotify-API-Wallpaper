@@ -34,6 +34,8 @@
       background-position: center;
       filter: blur(20px) saturate(1.2) brightness(.35);
       transform: scale(1.1);
+      /* transition: ease-in-out .05s all; */
+      will-change: transform;
     }
 
     /* subtle animated gradient overlay */
@@ -60,6 +62,11 @@
       }
     }
 
+    /* when paused, stop the subtle gradient motion to avoid visual movement */
+    .paused .gradient {
+      animation-play-state: paused;
+    }
+
     /* main card */
     .card {
       text-overflow: ellipsis;
@@ -78,6 +85,7 @@
     }
 
     .cover {
+      position: relative;
       width: 184px;
       height: 184px;
       border-radius: 12px;
@@ -112,6 +120,15 @@
       overflow: hidden
     }
 
+    /* clickable title when track is available */
+    .title.clickable {
+      cursor: pointer;
+    }
+    .title.clickable:hover {
+      text-decoration: underline;
+      text-decoration-color: rgba(255,255,255,0.12);
+    }
+
     .artist {
       opacity: .85;
       font-weight: 600
@@ -135,7 +152,8 @@
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #1db954, #1ed760);
-      transition: width 0.3s linear;
+      transition: width 0.5s linear;
+      border-radius: inherit;
     }
 
     .time-row {
@@ -150,19 +168,20 @@
     .wave {
       display: flex;
       position: absolute;
-      right: 28px;
-      top: 28px;
+      right: 10px;
+      bottom: 10px;
+      height: 40px;
       z-index: 3;
       gap: 4px;
       align-items: flex-end;
-      height: 80px;
-      display: none;
+      /* display: none; */
     }
 
     .wave .bar {
       width: 4px;
       border-radius: 2px;
-      background: linear-gradient(#fff, #ddd);
+      /* background: linear-gradient(#1db954, #fff); */
+      background: linear-gradient(90deg, #1db954, #1ed760);
       transform-origin: bottom;
       animation: bounce 1s infinite ease-in-out;
     }
@@ -321,7 +340,7 @@
       position: fixed;
       left: 50%;
       transform: translateX(-50%);
-      bottom: 140px;
+      bottom: 180px;
       background: rgba(0, 0, 0, 0.6);
       color: #fff;
       padding: 10px 14px;
@@ -342,11 +361,21 @@
 <body>
   <div class="wrap">
     <div class="bg" id="bg"></div>
-  <video id="canvasVideo" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(18px) saturate(1.2) brightness(.35);transform:scale(1.05);opacity:0;transition:opacity 420ms ease;pointer-events:none"></video>
-  <div class="gradient"></div>
+    <video id="canvasVideo" autoplay muted loop playsinline
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(18px) saturate(1.2) brightness(.35);transform:scale(1.05);opacity:0;transition:opacity 420ms ease;pointer-events:none;will-change:transform"></video>
+    <div class="gradient"></div>
 
     <div class="card" id="card">
-      <div class="cover" id="cover"><img id="coverImg" src="" alt="album cover"></div>
+      <div class="cover" id="cover">
+        <div class="wave" id="wave">
+          <div class="bar" style="height:26%"></div>
+          <div class="bar" style="height:44%"></div>
+          <div class="bar" style="height:62%"></div>
+          <div class="bar" style="height:34%"></div>
+          <div class="bar" style="height:50%"></div>
+        </div>
+        <img id="coverImg" src="./assets/spotify-logo.png" alt="album cover">
+      </div>
       <div class="info">
         <div class="title" id="title">Not playing</div>
         <div class="artist" id="artist"></div>
@@ -356,14 +385,6 @@
           <div class="bar" id="progressBar"></div>
         </div>
         <div class="time-row"><span id="timeCur">0:00</span><span id="timeDur">0:00</span></div>
-      </div>
-
-      <div class="wave" id="wave">
-        <div class="bar" style="height:26%"></div>
-        <div class="bar" style="height:44%"></div>
-        <div class="bar" style="height:62%"></div>
-        <div class="bar" style="height:34%"></div>
-        <div class="bar" style="height:50%"></div>
       </div>
     </div>
 
@@ -406,6 +427,13 @@
     // stable progress vars
     let currentProgressMs = 0
     let currentTrackId = null
+    // beat animation state
+    let _beatRaf = null
+    let _beatSeed = 0
+    let _beatBaseBg = 1.1
+    let _beatBaseCanvas = 1.05
+    let _beatStart = 0
+    const serverIntervalTimer = 5000
 
     // helper to update progress visual safely (can snap without animation)
     function setProgressVisual(ms, durationMs, snap = false) {
@@ -415,10 +443,12 @@
       const pct = Math.max(0, Math.min(100, (ms / Math.max(1, durationMs)) * 100))
       if (snap) {
         const prev = progressBar.style.transition
-        progressBar.style.transition = 'none'
+        // progressBar.style.transition = 'none'
         progressBar.style.width = pct + "%"
         timeCur.textContent = msToTime(ms)
-        requestAnimationFrame(() => requestAnimationFrame(() => { progressBar.style.transition = prev || 'width 0.3s linear' }))
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          progressBar.style.transition = prev || 'width 0.3s linear'
+        }))
       } else {
         progressBar.style.width = pct + "%"
         timeCur.textContent = msToTime(ms)
@@ -437,9 +467,15 @@
       try {
         const res = await fetch(API)
         if (res.status === 401) {
-          // not authenticated — redirect to login and ask to return here
-          const returnTo = encodeURIComponent(window.location.pathname || '/')
-          window.location.href = `/login?returnTo=${returnTo}`
+          // parse JSON body to see if auth is possible
+          let body = null
+          try { body = await res.json() } catch (e) { }
+          if (body && body.auth_possible) {
+            const returnTo = encodeURIComponent(window.location.pathname || '/')
+            window.location.href = `/login?returnTo=${returnTo}`
+            return
+          }
+          showToast('Server not configured for Spotify OAuth (missing client id/secret)')
           return
         }
         if (!res.ok) { throw new Error("not ok") }
@@ -450,6 +486,11 @@
         // show not playing
         updateUI(null)
         console.debug("fetch error", e)
+        // Detect server unreachable/network errors and show a helpful toast (throttled)
+        const msg = e && e.message ? String(e.message) : String(e)
+        if (/failed to fetch|networkerror|network error|ECONNREFUSED|refused/i.test(msg)) {
+          showServerDownToast()
+        }
       }
     }
 
@@ -474,21 +515,44 @@
         titleEl.textContent = "Not playing"
         artistEl.textContent = ""
         albumEl.textContent = ""
-        coverImg.src = ""
+        coverImg.src = "./assets/spotify-logo.png"
         bg.style.backgroundImage = ""
         progressBar.style.width = "0%"
         timeCur.textContent = "0:00"
         timeDur.textContent = "0:00"
         document.body.classList.add("paused")
+        // clear title click handlers
+        titleEl.classList.remove('clickable')
+        titleEl.tabIndex = -1
+        titleEl.onclick = null
+        titleEl.onkeydown = null
         return
       }
 
       const item = data.item
       const artists = item.artists.join(", ")
-  const img = (item.album_images && item.album_images[0] && item.album_images[0].url) || ""
-  const canvasUrl = item.canvas_url || null
+      const img = (item.album_images && item.album_images[0] && item.album_images[0].url) || ""
+      const canvasUrl = item.canvas_url || null
 
       titleEl.textContent = item.name
+      // make title clickable (open Spotify) when we have a track URL
+      const trackUrl = (item.external_urls && item.external_urls.spotify) || (item.id ? `https://open.spotify.com/track/${item.id}` : null)
+      if (trackUrl) {
+        titleEl.classList.add('clickable')
+        titleEl.tabIndex = 0
+        titleEl.setAttribute('role', 'link')
+        titleEl.setAttribute('aria-label', `Open ${item.name} on Spotify`)
+        // avoid duplicating handlers
+        titleEl.onclick = () => window.open(trackUrl, '_blank')
+        titleEl.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.open(trackUrl, '_blank') } }
+      } else {
+        titleEl.classList.remove('clickable')
+        titleEl.tabIndex = -1
+        titleEl.removeAttribute('role')
+        titleEl.removeAttribute('aria-label')
+        titleEl.onclick = null
+        titleEl.onkeydown = null
+      }
       artistEl.textContent = artists
       albumEl.textContent = item.album
       coverImg.src = img
@@ -505,11 +569,11 @@
           }
           // fade in
           canvasEl.style.opacity = 1
-          if (data.is_playing) canvasEl.play().catch(() => {})
+          if (data.is_playing) canvasEl.play().catch(() => { })
         } else {
           // fade out
           canvasEl.style.opacity = 0
-          try { canvasEl.pause() } catch (e) {}
+          try { canvasEl.pause() } catch (e) { }
         }
       }
       timeDur.textContent = msToTime(item.duration_ms)
@@ -539,12 +603,21 @@
         //   }
         // } else {
         //   // paused/stopped: follow server exactly
-            currentProgressMs = serverCur
-            setProgressVisual(currentProgressMs, item.duration_ms, true)
+        currentProgressMs = serverCur
+        setProgressVisual(currentProgressMs, item.duration_ms, true)
         // }
       }
 
       card.classList.toggle("paused", !data.is_playing)
+      // also mark the whole body paused so global visuals (like the gradient) can pause
+      document.body.classList.toggle('paused', !data.is_playing)
+
+      // beat animation: only when playing
+      if (data.is_playing) {
+        startBeat(item.id)
+      } else {
+        stopBeat()
+      }
 
       // ensure single interval advancing local progress while playing
       if (data.is_playing) {
@@ -575,15 +648,49 @@
       })
     }
 
+    // beat animation helpers — subtle scale/pulse synced to track id
+    function startBeat(trackId) {
+      _beatSeed = Array.from(trackId || '0').reduce((s, c) => s + c.charCodeAt(0), 0) % 1000
+      if (_beatRaf) return
+      _beatStart = performance.now()
+      const bgEl = document.getElementById('bg')
+      const canvasEl = document.getElementById('canvasVideo')
+      function step(t) {
+        const dt = (t - _beatStart) / 1000
+        // subtle LFO using seeded frequency
+        const freq = 0.8 + (_beatSeed % 5) * 0.02
+        const amp = 0.02 + ((_beatSeed % 7) * 0.003)
+        const v = 1 + Math.sin(dt * freq * Math.PI * 2 + (_beatSeed % 10)) * amp
+        if (bgEl) bgEl.style.transform = `scale(${_beatBaseBg * v})`
+        if (canvasEl) canvasEl.style.transform = `scale(${_beatBaseCanvas * v})`
+        _beatRaf = requestAnimationFrame(step)
+      }
+      _beatRaf = requestAnimationFrame(step)
+    }
+
+    function stopBeat() {
+      if (_beatRaf) cancelAnimationFrame(_beatRaf)
+      _beatRaf = null
+      const bgEl = document.getElementById('bg')
+      const canvasEl = document.getElementById('canvasVideo')
+      if (bgEl) bgEl.style.transform = 'scale(1.1)'
+      if (canvasEl) canvasEl.style.transform = 'scale(1.05)'
+    }
+
     async function control(action) {
       const buttons = document.querySelectorAll('.control-btn')
       buttons.forEach(b => b.classList.add('busy'))
       try {
         const res = await fetch("/" + action, { method: "POST" })
         if (res.status === 401) {
-          const returnTo = encodeURIComponent(window.location.pathname || '/')
-          window.location.href = `/login?returnTo=${returnTo}`
-          return
+          let body = null
+          try { body = await res.json() } catch (e) { }
+          if (body && body.auth_possible) {
+            const returnTo = encodeURIComponent(window.location.pathname || '/')
+            window.location.href = `/login?returnTo=${returnTo}`
+            return
+          }
+          showToast('Server not configured for Spotify OAuth (missing client id/secret)')
         } else if (!res.ok) {
           const txt = await res.text().catch(() => '')
           showToast('Action failed: ' + (txt || res.status))
@@ -591,7 +698,12 @@
         await fetchNow() // refresh UI after attempting action
       } catch (e) {
         console.error("control failed", e)
-        showToast('Network error')
+        const msg = e && e.message ? String(e.message) : String(e)
+        if (/failed to fetch|networkerror|network error|ECONNREFUSED|refused/i.test(msg)) {
+          showServerDownToast()
+        } else {
+          showToast('Network error')
+        }
       } finally {
         buttons.forEach(b => b.classList.remove('busy'))
       }
@@ -626,9 +738,19 @@
       clearTimeout(window._toastTimer)
       window._toastTimer = setTimeout(() => { t.style.display = 'none'; t.onclick = null }, 4500)
     }
+
+    // show a server-down toast but avoid spamming it repeatedly
+    function showServerDownToast() {
+      const now = Date.now()
+      const last = window._serverDownToastAt || 0
+      // throttle to once per 12s
+      if (now - last < 12000) return
+      window._serverDownToastAt = now
+      showToast('Server appears to be offline — start the local server (node server.js)')
+    }
     // poll
     fetchNow()
-    setInterval(fetchNow, 5000) // poll every 5s
+    setInterval(fetchNow, serverIntervalTimer) // poll every 5s
   </script>
 </body>
 
